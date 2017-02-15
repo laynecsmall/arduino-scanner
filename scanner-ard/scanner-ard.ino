@@ -1,4 +1,9 @@
   #define DEBUG 0
+  #define THRESHOLD 20
+  #define DEBOUNCE 100
+  #define MAT_X 10
+  #define MAX_READINGS 20
+  #define BAUD 115200
   
   #define SEL0 2
   #define SEL1 3
@@ -9,9 +14,10 @@
   #define MOUT 9
   #define MIN A0
 
-int outpin, i, j = 0;
+int outpin, i, j  = 0;
+int crossing_count = -1;
 int pwm_out = 128;
-int readings[10][10] = {0};
+int readings[MAX_READINGS][MAT_X] = {0};
 
 void setup() {
   // put your setup code here, to run once:
@@ -25,7 +31,7 @@ void setup() {
   pinMode(SEL3, OUTPUT);
   pinMode(EN, OUTPUT);
 
-  Serial.begin(9600);  
+  Serial.begin(BAUD);  
 
   digitalWrite(SEL0, 0);
   digitalWrite(SEL1, 0);
@@ -40,24 +46,25 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  readings[10][10] = {0};
-  for (int i = 0; i < 10; i++){
-    readings[0][i] = read_mux_num(i);
+  readings[MAX_READINGS][MAT_X] = {0};
+  for (int i = 0; i < MAT_X; i++){
+    readings[crossing_count][i] = read_mux_num(i);
   }
 
-  if (found_crossing(readings[0], 10, 10)){
-    Serial.println("Found crossing");
+  if (found_crossing(readings[crossing_count], MAT_X)){
+    crossing_count++;
+    }
+  else if (crossing_count > 0){
+    Serial.print("Total crossings: ");
+    Serial.print(crossing_count);
+    Serial.println("\n");
+    crossing_count = -1;
+    delay(DEBOUNCE);
+    print_crossing_counts();
   }
-  
 
-  if (DEBUG == 1){
-  for (int i = 0; i < 10; i++){
-    Serial.print(" ");
-    Serial.print(readings[0][i]);
-  }
-  Serial.println("");
-  }
-  
+  delay(1);
+ 
 }
 
 void set_mux(int num){
@@ -83,15 +90,28 @@ int read_mux_num(int pad){
   return analogRead(MIN);
 }
 
-bool found_crossing(int crossing_array[], int x, int y){
+bool found_crossing(int crossing_array[], int x){
   for (int i = 0; i < x; i++){
     
-      if (crossing_array[i] > 10) {
-        Serial.println(crossing_array[i]);
+      if (crossing_array[i] > THRESHOLD) {
+        //Serial.println(crossing_array[i]);
         return 1;
       }
     
   }
   return 0;
+}
+
+void print_crossing_counts(){
+  int cc = 0;
+  while (found_crossing( readings[cc], MAT_X )){
+    for (int i = 0; i < MAT_X; i++){
+      Serial.print(" ");
+      Serial.print(readings[cc][i]);
+    }
+    Serial.println("");
+    cc++;
+  }
+  Serial.println("===============");
 }
 
