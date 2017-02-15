@@ -1,29 +1,32 @@
-  #define DEBUG 0
-  #define THRESHOLD 20
-  #define DEBOUNCE 100
-  #define MAT_X 10
-  #define MAX_READINGS 20
-  #define BAUD 115200
-  
-  #define SEL0 2
-  #define SEL1 3
-  #define SEL2 4
-  #define SEL3 5
-  #define EN 6
 
-  #define MOUT 9
-  #define MIN A0
+//define system settings
+#define DEBUG 0 //enable debug mode, print one row once a second, good for human interatction
+#define THRESHOLD 20 //ignore any crossings below this value, needed because shorted pin on soic to wire board
+#define DEBOUNCE 100
+#define MAT_X 10
+#define MAX_READINGS 20 //at can rolling speed never seen more than 18 readings
+#define BAUD 115200
 
+//define arduino pins
+#define SEL0 2
+#define SEL1 3
+#define SEL2 4
+#define SEL3 5
+#define EN 6
+
+#define MOUT 9
+#define MIN A0
+
+//initialize variables
 int outpin, i, j  = 0;
-int crossing_count = -1;
+int crossing_count = 0;
 int pwm_out = 128;
 int readings[MAX_READINGS][MAT_X] = {0};
 
 void setup() {
-  // put your setup code here, to run once:
-
+  
+  //set arduino pin directions
   pinMode(MIN, INPUT);
-  //pinMode(MOUT, OUTPUT);
 
   pinMode(SEL0, OUTPUT);
   pinMode(SEL1, OUTPUT);
@@ -33,40 +36,63 @@ void setup() {
 
   Serial.begin(BAUD);  
 
-  digitalWrite(SEL0, 0);
-  digitalWrite(SEL1, 0);
-  digitalWrite(SEL2, 0);
-  digitalWrite(SEL3, 0);
-  digitalWrite(EN, 0);
+  set_mux(0); //set the mux to pin 0
+  digitalWrite(EN, 0); //enable the mux
 
-  pinMode(MOUT, OUTPUT);
+  pinMode(MOUT, OUTPUT); //write pin high for power to the mat row
+  //possibly more than one row for direction sensing
 
   
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  readings[MAX_READINGS][MAT_X] = {0};
-  for (int i = 0; i < MAT_X; i++){
-    readings[crossing_count][i] = read_mux_num(i);
-  }
-
-  if (found_crossing(readings[crossing_count], MAT_X)){
-    crossing_count++;
+  //if not debug mode, do main routine
+  if (DEBUG == 0){
+    readings[MAX_READINGS][MAT_X] = {0}; //reinitialize array
+    
+    for (int i = 0; i < MAT_X; i++){ //read a row
+      readings[crossing_count][i] = read_mux_num(i);
     }
-  else if (crossing_count > 0){
-    Serial.print("Total crossings: ");
-    Serial.print(crossing_count);
-    Serial.println("\n");
-    crossing_count = -1;
-    delay(DEBOUNCE);
-    print_crossing_counts();
+  
+    if (found_crossing(readings[crossing_count], MAT_X)){ //if there were useful results in the latest read row
+      crossing_count++; //increase the row count, scan again
+      }
+    else if (crossing_count > 0){ //no useful results in this row, if we've been scanning do finish scanning routine
+      //print summary data
+      Serial.print("Total crossings: ");
+      Serial.print(crossing_count);
+      Serial.println("\n");
+      
+      print_crossing_counts();
+
+      //reset row count, then wait to debounce 
+      crossing_count = 0;
+      delay(DEBOUNCE);
+    }
+  
+    delay(1); //delay 1ms to produce appropriate number of row scans at can rolling speed
   }
 
-  delay(1);
- 
-}
+  //debug mode, slow used for human interaction/testing the mat manually
+  else if (DEBUG == 1){
+    readings[MAX_READINGS][MAT_X] = {0}; //initialize the readings array
+    for (int i = 0; i < MAT_X; i++){ //read one row
+      readings[0][i] = read_mux_num(i);
+    }
+    if (found_crossing(readings[0], MAT_X)){ //if there's anything useful on the row, print it
+       for (int i = 0; i < MAT_X; i++){
+         Serial.print(" ");
+         Serial.print(readings[0][i]);
+       }
+       Serial.println("");
+    }
+    delay(1000); //wait one second. used to avoide overwhelming amount of data
+  }
+  
+} 
 
+//set the multiplexer out line as appropriate
+//num is the target line connected to the analogue read
 void set_mux(int num){
   //Serial.print("setting mux pins:");
   //Serial.print(num); 
@@ -84,12 +110,15 @@ void set_mux(int num){
   //Serial.print("\n");
 }
 
+//take a reading from the specifid pad, on x axis
 int read_mux_num(int pad){
   set_mux(pad);
-  delayMicroseconds(50);
+  delayMicroseconds(50); //wait after setting mux lines. May not be needed TODO test this
   return analogRead(MIN);
 }
 
+//check a crossing row to see if it contains data above the threshold
+//returns 1 if has data, 0 if no data found
 bool found_crossing(int crossing_array[], int x){
   for (int i = 0; i < x; i++){
     
@@ -102,6 +131,8 @@ bool found_crossing(int crossing_array[], int x){
   return 0;
 }
 
+//print a set of crossings via serial
+//crossing data taken from global readings array
 void print_crossing_counts(){
   int cc = 0;
   while (found_crossing( readings[cc], MAT_X )){
