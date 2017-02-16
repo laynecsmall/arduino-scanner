@@ -7,6 +7,7 @@
 #define MAT_X 10
 #define MAX_READINGS 20 //at can rolling speed never seen more than 18 readings
 #define BAUD 115200
+#define TAG_LIMIT 50 //maximum length of tags
 
 //define arduino pins
 #define SEL0 2
@@ -23,6 +24,10 @@ int outpin, i, j  = 0;
 int crossing_count = 0;
 int pwm_out = 128;
 int readings[MAX_READINGS][MAT_X] = {0};
+
+char tag_string[TAG_LIMIT] = {'\0'};
+
+int tag_index = 0;
 
 void setup() {
   
@@ -43,11 +48,22 @@ void setup() {
   pinMode(MOUT, OUTPUT); //write pin high for power to the mat row
   //possibly more than one row for direction sensing
 
-  
+  tag_string[0] = '\n';
 }
 
 void loop() {
   //if not debug mode, do main routine
+  if (Serial.available() > 0){
+    delay(20);
+    for (int i = 0; i < TAG_LIMIT -1; i++) {tag_string[i] = '\0'; }
+    while(Serial.available() > 0 && tag_index < TAG_LIMIT){
+      tag_string[tag_index++] = Serial.read();  
+    }
+    tag_index = 0;
+    Serial.print("Changed tag to: ");
+    Serial.println(tag_string);
+  }
+  
   if (DEBUG == 0){
     readings[MAX_READINGS][MAT_X] = {0}; //reinitialize array
     
@@ -63,7 +79,9 @@ void loop() {
       Serial.print("Total crossings: ");
       Serial.print(crossing_count);
       Serial.println("\n");
-      
+      Serial.print("Tag: ");
+      Serial.println(tag_string);
+                  
       print_crossing_counts();
 
       //reset row count, then wait to debounce 
