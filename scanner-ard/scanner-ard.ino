@@ -3,6 +3,7 @@
 #define DEBUG 0 //enable debug mode, print one row once a second, good for human interatction
 #define THRESHOLD 20 //ignore any crossings below this value, needed because shorted pin on soic to wire board
 #define DEBOUNCE 100
+#define MUX_SWITCH_WAIT 50 //wait for this many us after switching mux lines
 #define MAT_X 10
 #define MAX_READINGS 20 //at can rolling speed never seen more than 18 readings
 #define BAUD 115200
@@ -113,7 +114,7 @@ void set_mux(int num){
 //take a reading from the specifid pad, on x axis
 int read_mux_num(int pad){
   set_mux(pad);
-  delayMicroseconds(50); //wait after setting mux lines. May not be needed TODO test this
+  delayMicroseconds(MUX_SWITCH_WAIT); //wait after setting mux lines. May not be needed TODO test this
   return analogRead(MIN);
 }
 
