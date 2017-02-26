@@ -2,12 +2,11 @@
 //define system settings
 #define DEBUG 0 //enable debug mode, print one row once a second, good for human interatction
 #define THRESHOLD 20 //ignore any crossings below this value, needed because shorted pin on soic to wire board
-#define DEBOUNCE 100
+#define DEBOUNCE 1000
 #define MUX_SWITCH_WAIT 50 //wait for this many us after switching mux lines
 #define MAT_X 10
-#define MAX_READINGS 20 //at can rolling speed never seen more than 18 readings
+#define MAX_READINGS 40 //at can rolling speed never seen more than 18 readings
 #define BAUD 115200
-#define TAG_LIMIT 50 //maximum length of tags
 
 //define arduino pins
 #define SEL0 2
@@ -24,10 +23,8 @@ int outpin, i, j  = 0;
 int crossing_count = 0;
 int pwm_out = 128;
 int readings[MAX_READINGS][MAT_X] = {0};
-
-char tag_string[TAG_LIMIT] = {'\0'};
-
-int tag_index = 0;
+bool end_scan = 0;
+bool crossing_found = 0;
 
 void setup() {
   
@@ -39,7 +36,7 @@ void setup() {
   pinMode(SEL2, OUTPUT);
   pinMode(SEL3, OUTPUT);
   pinMode(EN, OUTPUT);
-
+  
   Serial.begin(BAUD);  
 
   set_mux(0); //set the mux to pin 0
@@ -48,39 +45,34 @@ void setup() {
   pinMode(MOUT, OUTPUT); //write pin high for power to the mat row
   //possibly more than one row for direction sensing
 
-  tag_string[0] = '\n';
 }
 
 void loop() {
-  //if not debug mode, do main routine
-  if (Serial.available() > 0){
-    delay(20);
-    for (int i = 0; i < TAG_LIMIT -1; i++) {tag_string[i] = '\0'; }
-    while(Serial.available() > 0 && tag_index < TAG_LIMIT){
-      tag_string[tag_index++] = Serial.read();  
-    }
-    tag_index = 0;
-    Serial.print("Changed tag to: ");
-    Serial.println(tag_string);
-  }
   
   if (DEBUG == 0){
     readings[MAX_READINGS][MAT_X] = {0}; //reinitialize array
-    
+
     for (int i = 0; i < MAT_X; i++){ //read a row
       readings[crossing_count][i] = read_mux_num(i);
     }
-  
-    if (found_crossing(readings[crossing_count], MAT_X)){ //if there were useful results in the latest read row
+    
+    crossing_found = found_crossing(readings[crossing_count], MAT_X); //check for crossings
+    
+    if (crossing_found){ //if there were useful results in the latest read row
       crossing_count++; //increase the row count, scan again
+      end_scan = 0;
       }
-    else if (crossing_count > 0){ //no useful results in this row, if we've been scanning do finish scanning routine
+    
+    else if (!crossing_found && end_scan == 0){ //no scan found, loop once more, see if there's data next time
+      end_scan = 1;
+    }
+    
+    else if (crossing_count > 0 && end_scan == 1){ //no useful results in this row, if we've been scanning do finish scanning routine
       //print summary data
       Serial.print("Total crossings: ");
       Serial.print(crossing_count);
       Serial.println("\n");
-      Serial.print("Tag: ");
-      Serial.println(tag_string);
+
                   
       print_crossing_counts();
 
@@ -89,7 +81,7 @@ void loop() {
       delay(DEBOUNCE);
     }
   
-    delay(1); //delay 1ms to produce appropriate number of row scans at can rolling speed
+    delay(0.5); //delay 1ms to produce appropriate number of row scans at can rolling speed
   }
 
   //debug mode, slow used for human interaction/testing the mat manually
